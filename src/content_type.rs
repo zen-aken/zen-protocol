@@ -5,6 +5,13 @@ pub enum ContentType {
 }
 
 impl ContentType {
+    /**
+     * @brief Converts a byte into a ContentType variant.
+     *
+     * @param byte The byte representing the content type.
+     * @return Ok(ContentType) if conversion succeeds, otherwise
+     *         Err(&'static str) describing the parsing error.
+     */
     pub fn from_bytes(byte: u8) -> Result<ContentType, &'static str> {
         match byte {
             0 => Ok(ContentType::AppJSON),

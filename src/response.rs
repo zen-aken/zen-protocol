@@ -19,6 +19,15 @@ pub struct Response {
 }
 
 impl Response {
+    /**
+     * @brief Deserializes a byte slice into a Response.
+     *
+     * Parses the provided byte data and constructs a Response instance.
+     *
+     * @param data The input byte slice containing the serialized Response.
+     * @return Ok(Response) if parsing succeeds, otherwise Err(&'static str)
+     *         describing the parsing error.
+     */
     pub fn from_bytes(data: &[u8]) -> Result<Response, &'static str> {
         // Header Check
         if data.len() < RESPONSE_HEADER_SIZE {
@@ -64,6 +73,12 @@ impl Response {
         })
     }
 
+    /**
+     * @brief Serializes the Response into a byte vector.
+     *
+     * @return Ok(Vec<u8>) containing the serialized Response,
+     *         otherwise Err(&'static str) describing the serialization error.
+     */
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let body = self.body.as_bytes();
 
@@ -80,6 +95,13 @@ impl Response {
         Ok(buffer)
     }
 
+    /**
+     * @brief Prints the Response contents to the standard output.
+     *
+     * Displays the Response fields in a human-readable format.
+     *
+     * @return Nothing.
+     */
     pub fn print(&self) -> () {
         println!("---------- New response ----------");
         println!("Magic: {:?}", self.header.magic);

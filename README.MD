@@ -1,191 +1,76 @@
 # Zen Protocol
 
-Zen Protocol is a custom binary protocol designed for structured request-response communication. It uses fixed-size headers, explicit field encodings, and length-prefixed payloads.
+Zen Protocol is a custom binary protocol written in Rust, designed for structured request-response communication.
 
-## Message Format
+It provides a lightweight and extensible communication format using fixed-size headers, explicit field encoding, and length-prefixed payloads.
 
-Zen Protocol supports two message types:
+## Features
 
-- **Request** — carries a method, content type, request identifier, path, and optional body.
-- **Response** — carries a content type, request identifier, status code, and optional body.
+- Custom binary message format.
+- Request-response communication.
+- Explicit big-endian integer encoding.
+- Length-prefixed paths and payloads.
+- UTF-8 string support.
+- Configurable body size limits.
+- Explicit serialization and deserialization.
+- Extensible method, content type, and status code definitions.
 
-All multi-byte integers use **big-endian byte order**.
+## Documentation
 
-## Request
+| Document | Description |
+|---|---|
+| [Protocol Specification](docs/PROTOCOL.md) | Binary message format, headers, field definitions, and encoding rules. |
+| [API Reference](docs/API.md) | Public Rust structures, enums, methods, and functions. |
 
-A request consists of a 21-byte header, followed by the path and body.
-
-### Request Header
-
-| Field | Type | Size | Description |
-|---|---|---:|---|
-| `magic` | `[u8; 4]` | 4 bytes | Protocol identifier: `Zen!` |
-| `version` | `u8` | 1 byte | Protocol version |
-| `method` | `u8` | 1 byte | Request method |
-| `content_type` | `u8` | 1 byte | Body content type |
-| `request_id` | `u32` | 4 bytes | Identifies the request |
-| `path_length` | `u16` | 2 bytes | Path length in bytes |
-| `body_length` | `u64` | 8 bytes | Body length in bytes |
-| **Total** | | **21 bytes** | |
-
-### Request Structure
-
-```rust
-#[derive(Debug)]
-pub struct RequestHeader {
-    pub magic: [u8; 4],
-    pub version: u8,
-    pub method: Methods,
-    pub content_type: ContentType,
-    pub request_id: u32,
-    pub path_length: u16,
-    pub body_length: u64,
-}
-
-#[derive(Debug)]
-pub struct Request {
-    pub header: RequestHeader,
-    pub path: Vec<u8>,
-    pub body: Vec<u8>,
-}
-```
-
-### Request Methods
-
-Methods are encoded as unsigned 8-bit integers.
-
-| Method | Value |
-|---|---:|
-| `GET` | `0x00` |
-| `POST` | `0x01` |
-| `UPDATE` | `0x02` |
-| `DELETE` | `0x03` |
-
-### Request Layout
+## Project Structure
 
 ```text
-+---------------------------+
-| Magic          4 bytes    |
-| Version        1 byte     |
-| Method         1 byte     |
-| Content Type   1 byte     |
-| Request ID     4 bytes    |
-| Path Length    2 bytes    |
-| Body Length    8 bytes    |
-+---------------------------+
-| Path           N bytes    |
-+---------------------------+
-| Body           M bytes    |
-+---------------------------+
+zen-protocol/
+├── docs/
+│   ├── API.md
+│   └── PROTOCOL.md
+├── src/
+│   └── lib.rs
+├── Cargo.toml
+├── LICENSE
+└── README.md
 ```
 
-The path begins immediately after the header. The body begins immediately after the path.
+## Usage
 
-The total message length is:
+Add Zen Protocol to your project's `Cargo.toml`:
 
-`21 + path_length + body_length` bytes.
+```toml
+[dependencies]
+zen-protocol = { git = "https://github.com/zen-aken/zen-protocol" }
+```
 
-## Response
-
-A response consists of a 20-byte header, followed by the body.
-
-### Response Header
-
-| Field | Type | Size | Description |
-|---|---|---:|---|
-| `magic` | `[u8; 4]` | 4 bytes | Protocol identifier: `Zen!` |
-| `version` | `u8` | 1 byte | Protocol version |
-| `content_type` | `u8` | 1 byte | Body content type |
-| `request_id` | `u32` | 4 bytes | Matches the corresponding request |
-| `status_code` | `u16` | 2 bytes | Indicates the result |
-| `body_length` | `u64` | 8 bytes | Body length in bytes |
-| **Total** | | **20 bytes** | |
-
-### Response Structure
+Example:
 
 ```rust
-#[derive(Debug)]
-pub struct ResponseHeader {
-    pub magic: [u8; 4],
-    pub version: u8,
-    pub content_type: ContentType,
-    pub request_id: u32,
-    pub status_code: StatusCode,
-    pub body_length: u64,
-}
+use zen_protocol::{Request, RequestHeader, Methods, ContentType};
 
-#[derive(Debug)]
-pub struct Response {
-    pub header: ResponseHeader,
-    pub body: Vec<u8>,
-}
+let request = Request {
+    header: RequestHeader {
+        magic: *b"Zen!",
+        version: 1,
+        method: Methods::GET,
+        content_type: ContentType::AppJSON,
+        request_id: 42,
+        path_length: 5,
+        body_length: 2,
+    },
+    path: "/test".to_string(),
+    body: "{}".to_string(),
+};
+
+let bytes = request.to_bytes().unwrap();
 ```
 
-### Response Layout
-
-```text
-+---------------------------+
-| Magic          4 bytes    |
-| Version        1 byte     |
-| Content Type   1 byte     |
-| Request ID     4 bytes    |
-| Status Code    2 bytes    |
-| Body Length    8 bytes    |
-+---------------------------+
-| Body           N bytes    |
-+---------------------------+
-```
-
-The total response length is:
-
-`20 + body_length` bytes.
-
-## Content Types
-
-Content types are encoded as unsigned 8-bit integers.
-
-| Content Type | Value | Description |
-|---|---:|---|
-| `AppJSON` | `0x00` | JSON payload |
-
-## Status Codes
-
-Status codes are encoded as unsigned 16-bit integers.
-
-| Status Code | Value | Description |
-|---|---:|---|
-| `Success` | `0` | The request completed successfully |
-| `UnknownError` | `999` | An unspecified error occurred |
-
-## Implementation Requirements
-
-A compliant implementation should:
-
-1. Validate the magic bytes before processing a message.
-2. Validate the protocol version.
-3. Reject unknown methods, content types, and status codes.
-4. Decode multi-byte integers using big-endian byte order.
-5. Validate message lengths before accessing or allocating payload data.
-6. Enforce a configurable maximum message size.
-7. Preserve the request identifier in the corresponding response.
-8. Return parsing errors instead of panicking on malformed input.
-
-The binary format must be serialized and parsed explicitly. Rust's in-memory struct layout is not the wire format; `#[repr]` on an enum does not automatically serialize a complete message.
-
-## Current Scope
-
-The protocol currently defines:
-
-- Binary request and response messages
-- Request methods
-- Content types
-- Status codes
-- Length-prefixed paths and bodies
-
-Features such as authentication, encryption, connection framing, streaming, and additional content types are not yet specified.
+See the [API Reference](docs/API.md) for available functions and the [Protocol Specification](docs/PROTOCOL.md) for binary encoding details.
 
 ## License
 
-MIT License. See the [LICENSE](LICENSE) file for details.
+MIT License. See [LICENSE](LICENSE) for details.
 
 Copyright (c) 2026 Your Name

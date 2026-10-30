@@ -21,6 +21,18 @@ pub struct Request {
 }
 
 impl Request {
+    /**
+     * @brief Deserializes a byte slice into a Request.
+     *
+     * Reads the remaining request data from the provided stream
+     * and constructs a Request instance.
+     *
+     * @tparam R A type implementing the Read trait.
+     * @param stream Mutable reference to the input stream.
+     * @param bytes Byte slice containing the request header.
+     * @return Ok(Request) if parsing succeeds, otherwise
+     *         Err(&'static str) describing the parsing error.
+     */
     pub fn from_bytes<R: Read>(stream: &mut R, bytes: &[u8]) -> Result<Request, &'static str> {
         if bytes.len() < REQUEST_HEADER_SIZE {
             return Err("Request size is smaller than expected!");
@@ -85,6 +97,12 @@ impl Request {
         })
     }
 
+    /**
+     * @brief Serializes the Request into a byte vector.
+     *
+     * @return Ok(Vec<u8>) containing the serialized request,
+     *         otherwise Err(&'static str) describing the error.
+     */
     pub fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         let body = self.body.as_bytes();
         let path = self.path.as_bytes();
@@ -104,6 +122,13 @@ impl Request {
         Ok(buffer)
     }
 
+    /**
+     * @brief Prints the Request contents to standard output.
+     *
+     * Displays the request fields in a human-readable format.
+     *
+     * @return Nothing.
+     */
     pub fn print(&self) -> () {
         println!("---------- New request ----------");
         println!("Magic: {:?}", self.header.magic);

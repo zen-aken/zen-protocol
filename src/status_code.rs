@@ -6,6 +6,13 @@ pub enum StatusCode {
 }
 
 impl StatusCode {
+    /**
+     * @brief Converts a two-byte array into a StatusCode.
+     *
+     * @param byte The two-byte array representing the status code.
+     * @return Ok(StatusCode) if conversion succeeds, otherwise
+     *         Err(&'static str) describing the error.
+     */
     pub fn from_bytes(byte: [u8; 2]) -> Result<StatusCode, &'static str> {
         match u16::from_be_bytes(byte) {
             0 => Ok(StatusCode::Success),

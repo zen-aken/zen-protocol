@@ -8,6 +8,13 @@ pub enum Methods {
 }
 
 impl Methods {
+    /**
+     * @brief Parses a byte into a Methods variant.
+     *
+     * @param byte The byte representing the HTTP-like request method.
+     * @return Ok(Methods) if the byte matches a valid method,
+     *         otherwise Err(&'static str) describing the error.
+     */
     pub fn parse(byte: u8) -> Result<Methods, &'static str> {
         match byte {
             0 => Ok(Methods::GET),
@@ -18,6 +25,11 @@ impl Methods {
         }
     }
 
+    /**
+     * @brief Returns the maximum allowed body size for this method.
+     *
+     * @return Maximum body size in bytes.
+     */
     pub fn max_body_size(&self) -> usize {
         match self {
             Methods::GET | Methods::DELETE => 0,
