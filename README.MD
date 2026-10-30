@@ -73,4 +73,4 @@ See the [API Reference](docs/API.md) for available functions and the [Protocol S
 
 MIT License. See [LICENSE](LICENSE) for details.
 
-Copyright (c) 2026 Your Name
+Copyright (c) 2026 Zen
