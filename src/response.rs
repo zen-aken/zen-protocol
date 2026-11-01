@@ -2,7 +2,6 @@ use crate::{
     MAGIC, RESPONSE_HEADER_SIZE, VERSION,
     content_type::ContentType,
     error::{ParseError, ParseErrorKind},
-    request::Request,
     status_code::StatusCode,
 };
 
@@ -141,21 +140,6 @@ impl Response {
         println!("Body length {}", self.header.body_length);
         println!("Body: {}", self.body);
         println!("---------------------------------");
-    }
-
-    pub fn not_found(request: &Request) -> Response {
-        let message = String::from("{ \"error\": \"Not found!\"}");
-        Response {
-            header: ResponseHeader {
-                magic: MAGIC,
-                version: VERSION,
-                content_type: ContentType::AppJSON,
-                request_id: request.header.request_id,
-                status_code: StatusCode::NotFound,
-                body_length: message.len() as u64,
-            },
-            body: message,
-        }
     }
 }
 
