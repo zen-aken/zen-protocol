@@ -1,4 +1,5 @@
 pub mod content_type;
+pub mod error;
 pub mod methods;
 pub mod request;
 pub mod response;

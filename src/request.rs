@@ -1,4 +1,10 @@
-use crate::{MAGIC, REQUEST_HEADER_SIZE, VERSION, content_type::ContentType, methods::Methods};
+use crate::{
+    MAGIC, REQUEST_HEADER_SIZE, VERSION,
+    content_type::ContentType,
+    error::{ParseError, ParseErrorKind},
+    methods::Methods,
+    status_code::StatusCode,
+};
 
 use std::io::Read;
 
@@ -27,60 +33,110 @@ impl Request {
      * Reads the remaining request data from the provided stream
      * and constructs a Request instance.
      *
-     * @tparam R A type implementing the Read trait.
+     * @param R A type implementing the Read trait.
      * @param stream Mutable reference to the input stream.
      * @param bytes Byte slice containing the request header.
      * @return Ok(Request) if parsing succeeds, otherwise
-     *         Err(&'static str) describing the parsing error.
+     *         Err(ParseError) describing the parsing error.
      */
-    pub fn from_bytes<R: Read>(stream: &mut R, bytes: &[u8]) -> Result<Request, &'static str> {
+    pub fn from_bytes<R: Read>(stream: &mut R, bytes: &[u8]) -> Result<Request, ParseError> {
         if bytes.len() < REQUEST_HEADER_SIZE {
-            return Err("Request size is smaller than expected!");
+            return Err(ParseError {
+                request_id: 0,
+                status_code: StatusCode::BadRequest,
+                kind: ParseErrorKind::InvalidHeaderSize,
+            });
         }
 
+        let request_id: u32 = u32::from_be_bytes(bytes[7..11].try_into().unwrap());
+
         if bytes[0..4] != MAGIC {
-            return Err("Unmatched magic!");
+            return Err(ParseError {
+                request_id: request_id,
+                status_code: StatusCode::BadRequest,
+                kind: ParseErrorKind::MagicMismatch,
+            });
         }
 
         if bytes[4] != VERSION {
-            return Err("Incompatible version!");
+            return Err(ParseError {
+                request_id: request_id,
+                status_code: StatusCode::BadRequest,
+                kind: ParseErrorKind::InvalidVersion,
+            });
         }
 
         let method = match bytes[5] {
-            0 => Methods::GET,
-            1 => Methods::POST,
-            2 => Methods::UPDATE,
-            3 => Methods::DELETE,
-            _ => return Err("Unknown method!"),
+            0 => Methods::NONE,
+            1 => Methods::GET,
+            2 => Methods::POST,
+            3 => Methods::UPDATE,
+            4 => Methods::PATCH,
+            5 => Methods::DELETE,
+            _ => {
+                return Err(ParseError {
+                    request_id: request_id,
+                    status_code: StatusCode::BadRequest,
+                    kind: ParseErrorKind::UnknownMethod,
+                });
+            }
         };
 
         let content_type = match bytes[6] {
-            0 => ContentType::AppJSON,
-            _ => return Err("Unknown content type!"),
+            0 => ContentType::NONE,
+            1 => ContentType::AppJSON,
+            _ => {
+                return Err(ParseError {
+                    request_id: request_id,
+                    status_code: StatusCode::BadRequest,
+                    kind: ParseErrorKind::UnknownContentType,
+                });
+            }
         };
 
-        let request_id: u32 = u32::from_be_bytes(bytes[7..11].try_into().unwrap());
         let path_length: u16 = u16::from_be_bytes(bytes[11..13].try_into().unwrap());
         let body_length: u64 = u64::from_be_bytes(bytes[13..21].try_into().unwrap());
 
         let path_len: usize = usize::from(path_length);
-        let body_len: usize = usize::try_from(body_length).map_err(|_| "Body too large!")?;
+        let body_len: usize = usize::try_from(body_length).map_err(|_| ParseError {
+            request_id: request_id,
+            status_code: StatusCode::BadRequest,
+            kind: ParseErrorKind::BodyIsTooLarge,
+        })?;
         if body_len > method.max_body_size() {
-            return Err("Body too large!");
+            return Err(ParseError {
+                request_id: request_id,
+                status_code: StatusCode::BadRequest,
+                kind: ParseErrorKind::BodyIsTooBigForMethod,
+            });
         }
 
-        let total: usize = path_len.checked_add(body_len).ok_or("Request too large!")?;
+        let total: usize = path_len.checked_add(body_len).ok_or(ParseError {
+            request_id: request_id,
+            status_code: StatusCode::BadRequest,
+            kind: ParseErrorKind::PathLengthIsTooLong,
+        })?;
 
         let mut buffer: Vec<u8> = vec![0u8; total];
-        stream
-            .read_exact(&mut buffer)
-            .map_err(|_| "Failed to read path and body!")?;
+        stream.read_exact(&mut buffer).map_err(|_| ParseError {
+            request_id: request_id,
+            status_code: StatusCode::BadRequest,
+            kind: ParseErrorKind::FailedToReadPathAndBody,
+        })?;
 
-        let path: String = String::from_utf8(buffer[0..path_len].to_vec())
-            .map_err(|_| "Invalid UTF-8 in path!")?;
+        let path: String =
+            String::from_utf8(buffer[0..path_len].to_vec()).map_err(|_| ParseError {
+                request_id: request_id,
+                status_code: StatusCode::BadRequest,
+                kind: ParseErrorKind::InvalidUTF8InPath,
+            })?;
 
         let body: String =
-            String::from_utf8(buffer[path_len..].to_vec()).map_err(|_| "Invalid UTF-8 in body!")?;
+            String::from_utf8(buffer[path_len..].to_vec()).map_err(|_| ParseError {
+                request_id: request_id,
+                status_code: StatusCode::BadRequest,
+                kind: ParseErrorKind::InvalidUTF8InBody,
+            })?;
 
         Ok(Request {
             header: RequestHeader {
@@ -150,12 +206,12 @@ mod tests {
     use std::io::Cursor;
 
     #[test]
-    fn from_bytes() -> Result<(), &'static str> {
+    fn from_bytes() -> Result<(), ParseError> {
         let data: [u8; 24] = [
             0x5A, 0x65, 0x6E, 0x21, // 0–3: magic
             0x01, // 4: version
-            0x01, // 5: method
-            0x00, // 6: content type
+            0x02, // 5: method
+            0x01, // 6: content type
             0x00, 0x00, 0x00, 0x2A, // 7–10: request_id
             0x00, 0x01, // 11–12: path_length = 1
             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, // 13–20: body_length = 2
@@ -187,8 +243,8 @@ mod tests {
         let expected_data: [u8; 24] = [
             0x5A, 0x65, 0x6E, 0x21, // 0–3: magic
             0x01, // 4: version
-            0x00, // 5: method
-            0x00, // 6: content type
+            0x01, // 5: method
+            0x01, // 6: content type
             0x00, 0x00, 0x00, 0x2A, // 7–10: request_id
             0x00, 0x01, // 11–12: path_length = 1
             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, // 13–20: body_length = 2

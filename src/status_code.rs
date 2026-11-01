@@ -2,7 +2,10 @@
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum StatusCode {
     Success = 0,
-    UnknownError = 999,
+    BadRequest = 400,
+    NotFound = 404,
+    InternalServerError = 500,
+    InvalidHeader = 999,
 }
 
 impl StatusCode {
@@ -16,6 +19,7 @@ impl StatusCode {
     pub fn from_bytes(byte: [u8; 2]) -> Result<StatusCode, &'static str> {
         match u16::from_be_bytes(byte) {
             0 => Ok(StatusCode::Success),
+            404 => Ok(StatusCode::NotFound),
             _ => Err("Unknown status code"),
         }
     }

@@ -1,7 +1,8 @@
 #[repr(u8)]
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum ContentType {
-    AppJSON = 0x00,
+    NONE = 0x00,
+    AppJSON = 0x01,
 }
 
 impl ContentType {
@@ -14,7 +15,8 @@ impl ContentType {
      */
     pub fn from_bytes(byte: u8) -> Result<ContentType, &'static str> {
         match byte {
-            0 => Ok(ContentType::AppJSON),
+            0 => Ok(ContentType::NONE),
+            1 => Ok(ContentType::AppJSON),
             _ => Err("Unknown content type"),
         }
     }
@@ -26,7 +28,7 @@ mod tests {
 
     #[test]
     fn test_parse_content_type() -> Result<(), &'static str> {
-        assert_eq!(ContentType::from_bytes(0)?, ContentType::AppJSON);
+        assert_eq!(ContentType::from_bytes(1)?, ContentType::AppJSON);
         Ok(())
     }
 }

@@ -1,10 +1,12 @@
 #[repr(u8)]
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Methods {
-    GET = 0x00,
-    POST = 0x01,
-    UPDATE = 0x02,
-    DELETE = 0x03,
+    NONE = 0x00,
+    GET = 0x01,
+    POST = 0x02,
+    UPDATE = 0x03,
+    PATCH = 0x04,
+    DELETE = 0x05,
 }
 
 impl Methods {
@@ -32,8 +34,8 @@ impl Methods {
      */
     pub fn max_body_size(&self) -> usize {
         match self {
-            Methods::GET | Methods::DELETE => 0,
-            Methods::POST | Methods::UPDATE => 16 * 1024 * 1024,
+            Methods::GET | Methods::DELETE | Methods::NONE => 0,
+            Methods::POST | Methods::UPDATE | Methods::PATCH => 16 * 1024 * 1024,
         }
     }
 }

@@ -1,5 +1,9 @@
 use crate::{
-    MAGIC, RESPONSE_HEADER_SIZE, VERSION, content_type::ContentType, status_code::StatusCode,
+    MAGIC, RESPONSE_HEADER_SIZE, VERSION,
+    content_type::ContentType,
+    error::{ParseError, ParseErrorKind},
+    request::Request,
+    status_code::StatusCode,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -28,26 +32,48 @@ impl Response {
      * @return Ok(Response) if parsing succeeds, otherwise Err(&'static str)
      *         describing the parsing error.
      */
-    pub fn from_bytes(data: &[u8]) -> Result<Response, &'static str> {
+    pub fn from_bytes(data: &[u8]) -> Result<Response, ParseError> {
         // Header Check
         if data.len() < RESPONSE_HEADER_SIZE {
-            return Err("Incomplete header");
+            return Err(ParseError {
+                request_id: 0,
+                status_code: StatusCode::BadRequest,
+                kind: ParseErrorKind::InvalidHeaderSize,
+            });
         }
+
+        // Request id
+        let request_id: u32 = u32::from_be_bytes([data[6], data[7], data[8], data[9]]);
 
         // Magic Check
         if data[0..4] != MAGIC {
-            return Err("Invalid Magic");
+            return Err(ParseError {
+                request_id: request_id,
+                status_code: StatusCode::BadRequest,
+                kind: ParseErrorKind::MagicMismatch,
+            });
         }
 
         // Version Check
         if data[4] != VERSION {
-            return Err("Outdated version");
+            return Err(ParseError {
+                request_id: request_id,
+                status_code: StatusCode::BadRequest,
+                kind: ParseErrorKind::InvalidVersion,
+            });
         }
 
-        let content_type = ContentType::from_bytes(data[5])?;
-        let status_code = StatusCode::from_bytes([data[10], data[11]])?;
+        let content_type = ContentType::from_bytes(data[5]).map_err(|_| ParseError {
+            request_id: request_id,
+            status_code: StatusCode::BadRequest,
+            kind: ParseErrorKind::UnknownContentType,
+        })?;
+        let status_code = StatusCode::from_bytes([data[10], data[11]]).map_err(|_| ParseError {
+            request_id: request_id,
+            status_code: StatusCode::BadRequest,
+            kind: ParseErrorKind::UnknownContentType,
+        })?;
 
-        let request_id: u32 = u32::from_be_bytes([data[6], data[7], data[8], data[9]]);
         let body_length: u64 = u64::from_be_bytes([
             data[12], data[13], data[14], data[15], data[16], data[17], data[18], data[19],
         ]);
@@ -57,8 +83,11 @@ impl Response {
         for i in 0..body_length as usize {
             body.push(data[20 + i]);
         }
-        let body =
-            String::from_utf8(body).map_err(|_| "Failed to transform body Vec to String!")?;
+        let body = String::from_utf8(body).map_err(|_| ParseError {
+            request_id: request_id,
+            status_code: StatusCode::BadRequest,
+            kind: ParseErrorKind::InvalidUTF8InBody,
+        })?;
 
         Ok(Response {
             header: ResponseHeader {
@@ -113,6 +142,21 @@ impl Response {
         println!("Body: {}", self.body);
         println!("---------------------------------");
     }
+
+    pub fn not_found(request: &Request) -> Response {
+        let message = String::from("{ \"error\": \"Not found!\"}");
+        Response {
+            header: ResponseHeader {
+                magic: MAGIC,
+                version: VERSION,
+                content_type: ContentType::AppJSON,
+                request_id: request.header.request_id,
+                status_code: StatusCode::NotFound,
+                body_length: message.len() as u64,
+            },
+            body: message,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -120,11 +164,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn from_bytes() -> Result<(), &'static str> {
+    fn from_bytes() -> Result<(), ParseError> {
         let data: [u8; 31] = [
             0x5A, 0x65, 0x6E, 0x21, // Magic: "Zen!"
             0x01, // Version: 1
-            0x00, // ContentType::AppJSON = 0x00
+            0x01, // ContentType::AppJSON = 0x01
             0x00, 0x00, 0x00, 0x2A, // Request ID: 42
             0x00, 0x00, // StatusCode: 0 (0x0000)
             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0B, // Body length: 11
@@ -150,7 +194,7 @@ mod tests {
         let expected_data: [u8; 31] = [
             0x5A, 0x65, 0x6E, 0x21, // Magic: "Zen!"
             0x01, // Version: 1
-            0x00, // ContentType::AppJSON = 0x00
+            0x01, // ContentType::AppJSON = 0x01
             0x00, 0x00, 0x00, 0x2A, // Request ID: 42
             0x00, 0x00, // StatusCode: 0 (0x0000)
             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0B, // Body length: 11
